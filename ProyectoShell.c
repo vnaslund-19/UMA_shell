@@ -42,8 +42,22 @@ int main(void)
 
     if (strcmp(args[0], "logout") == 0)
     {
-      
+      printf("\nSaliendo del Shell\n");
+      exit(0);
     }
+    else if (strcmp(args[0], "cd") == 0)
+    {
+      if (!args[1])
+      {
+        const char *home = getenv("HOME");
+        if (home != NULL)
+          chdir(home);
+      }
+      else
+        chdir(args[1]);
+      continue;
+    }
+
     int pid = fork();
     if (pid == 0)      // hijo
     {
