@@ -1,20 +1,45 @@
 /*------------------------------------------------------------------------------
 Proyecto Shell de UNIX. Sistemas Operativos
-Grados I. Inform�tica, Computadores & Software
+Grados I. Informatica, Computadores & Software
 Dept. Arquitectura de Computadores - UMA
 
-Algunas secciones est�n inspiradas en ejercicios publicados en el libro
+Algunas secciones estan inspiradas en ejercicios publicados en el libro
 "Fundamentos de Sistemas Operativos", Silberschatz et al.
 
 Para compilar este programa: gcc ProyectoShell.c ApoyoTareas.c -o MiShell
 Para ejecutar este programa: ./MiShell
-Para salir del programa en ejecuci�n, pulsar Control+D
+Para salir del programa en ejecucion, pulsar Control+D
 ------------------------------------------------------------------------------*/
 
-#include "ApoyoTareas.h" // Cabecera del m�dulo de apoyo ApoyoTareas.c
+#include "ApoyoTareas.h" // Cabecera del modulo de apoyo ApoyoTareas.c
  
-#define MAX_LINE 256 // 256 caracteres por l�nea para cada comando es suficiente
+#define MAX_LINE 256 // 256 caracteres por linea para cada comando es suficiente
 #include <string.h>  // Para comparar cadenas de cars. (a partir de la tarea 2)
+#include <errno.h>
+#include <stdbool.h>
+
+bool is_builtin(char **args)
+{
+  if (strcmp(args[0], "logout") == 0)
+  {
+    printf("\nSaliendo del Shell\n");
+    exit(0);
+  }
+  else if (strcmp(args[0], "cd") == 0)
+  {
+    if (!args[1])
+    {
+      const char *home = getenv("HOME");
+      if (home != NULL)
+        chdir(home);
+    }
+    else
+      chdir(args[1]);
+    return true;
+  }
+  else
+    return false;
+}
 
 // --------------------------------------------
 //                     MAIN          
@@ -40,28 +65,17 @@ int main(void)
     if (args[0]==NULL)
       continue; // Si se introduce un comando vacio, no hacemos nada
 
-    if (strcmp(args[0], "logout") == 0)
-    {
-      printf("\nSaliendo del Shell\n");
-      exit(0);
-    }
-    else if (strcmp(args[0], "cd") == 0)
-    {
-      if (!args[1])
-      {
-        const char *home = getenv("HOME");
-        if (home != NULL)
-          chdir(home);
-      }
-      else
-        chdir(args[1]);
-      continue;
-    }
+    if (is_builtin(args))
+      continue ;
 
     int pid = fork();
     if (pid == 0)      // hijo
     {
-      execvp(args[0], args);
+      if (execvp(args[0], args) == -1)
+      {
+        printf("Error. Comando %s no encontrado\n", args[0]);
+        exit(errno);
+      }
       exit(0);
     }
     else if (pid > 0)  // Padre
@@ -70,6 +84,7 @@ int main(void)
       {
         // Si NO es en segundo plano, esperar al hijo
         wait(NULL);
+        // Only print if execp successfull CHANGE
         printf("Comando %s ejecutado en primer plano con pid %d.\n", args[0], pid);
       }
       else
