@@ -25,7 +25,7 @@ bool is_builtin(char **args)
     printf("\nSaliendo del Shell\n");
     exit(0);
   }
-  else if (strcmp(args[0], "cd") == 0)
+  else if (strcmp(args[0], "cd") == 0) // Doesn't handle failures, nor status msgs yet
   {
     if (!args[1])
     {
@@ -39,6 +39,21 @@ bool is_builtin(char **args)
   }
   else
     return false;
+}
+
+void child(char **args, int background)
+{
+  new_process_group(getpid()); // FASE 3: el hijo crea su grupo
+  if (background == 0)
+    set_terminal(getpid());    // FASE 3: primer plano toma la terminal
+
+  restore_terminal_signals();  // FASE 3: reactiva señales
+  if (execvp(args[0], args) == -1)
+  {
+    printf("Error. Comando %s no encontrado\n", args[0]);
+    exit(errno);
+  }
+  exit(0);
 }
 
 // --------------------------------------------
@@ -71,21 +86,9 @@ int main(void)
       continue ;
 
     pid_fork = fork();
-    if (pid_fork == 0)      // hijo
-    {
-      new_process_group(getpid()); // FASE 3: el hijo crea su grupo
-      if (background == 0)
-        set_terminal(getpid());    // FASE 3: primer plano toma la terminal
-
-      restore_terminal_signals();  // FASE 3: reactiva señales
-      if (execvp(args[0], args) == -1)
-      {
-        printf("Error. Comando %s no encontrado\n", args[0]);
-        exit(errno);
-      }
-      exit(0);
-    }
-    else if (pid_fork > 0)  // Padre
+    if (pid_fork == 0)          // Hijo
+      child(args, background);
+    else if (pid_fork > 0)      // Padre
     {
       new_process_group(pid_fork);
       if (background == 0)
@@ -106,7 +109,7 @@ int main(void)
       }
     }
     else
-      printf("Error. Comando %s no encontrado\n", args[0]);
+      printf("Error de fork\n");
   }
 }
 
