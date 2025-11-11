@@ -18,6 +18,48 @@ Para salir del programa en ejecucion, pulsar Control+D
 #include <errno.h>
 #include <stdbool.h>
 
+// FASE 4: Lista global de tareas
+job *job_list = NULL;
+
+// FASE 4: Manejador para SIGCHLD
+// TODO: hacer más legible
+void manejador(int sig)
+{
+  int status, info;
+  pid_t pid;
+
+  // FASE 4: revisar procesos sin bloquear
+  while ((pid = waitpid(-1, &status, WUNTRACED | WNOHANG | WCONTINUED)) > 0)
+  {
+    enum status st = analyze_status(status, &info);
+
+    // FASE 4: buscar el comando en la lista
+    job *j = get_item_bypid(job_list, pid);
+    if (!j) continue;
+
+    if (st == FINALIZADO)
+    {
+      printf("Comando %s ejecutado en segundo plano con PID %d ha concluido.\n",
+              j->command, pid);
+      block_SIGCHLD();          // FASE 4
+      delete_job(job_list, j);  // FASE 4
+      unblock_SIGCHLD();        // FASE 4
+    }
+    else if (st == SUSPENDIDO)
+    {
+      printf("Comando %s ejecutado en segundo plano con PID %d ha suspendido su ejecución.\n",
+              j->command, pid);
+      j->ground = DETENIDO;     // FASE 4
+    }
+    else if (st == REANUDADO)
+    {
+      printf("Comando %s ejecutado en segundo plano con PID %d ha reanudado su ejecución.\n",
+              j->command, pid);
+      j->ground = SEGUNDOPLANO; // FASE 4
+    }
+  }
+}
+
 bool is_builtin(char **args)
 {
   if (strcmp(args[0], "logout") == 0)
@@ -74,6 +116,12 @@ int main(void)
 
   ignore_terminal_signals();  // FASE 3
 
+  // FASE 4: Crear lista global de tareas
+  job_list = new_list("Lista de tareas");
+
+  // FASE 4: Asociar manejador SIGCHLD
+  signal(SIGCHLD, manejador);
+
   while (1) // El programa termina cuando se pulsa Control+D dentro de get_command()
   {   		
     printf("COMANDO->");
@@ -91,20 +139,40 @@ int main(void)
     else if (pid_fork > 0)      // Padre
     {
       new_process_group(pid_fork);
-      if (background == 0)
+
+      if (background == 0)      // Primer plano
       {
         set_terminal(pid_fork);                           // FASE 3: cede terminal al hijo
         pid_wait = waitpid(pid_fork, &status, WUNTRACED); // FASE 3: wait con WUNTRACED
         status_res = analyze_status(status, &info);       // FASE 3: analiza estado
 
         set_terminal(getpid());   // FASE 3: recupera la terminal
-        printf("Comando %s ejecutado en primer plano con pid %d. Estado %s. Info: %d.\n",
-                args[0], pid_fork, status_strings[status_res], info);
+
+        if (status_res == SUSPENDIDO)
+        {
+          printf("Comando %s suspendido en primer plano con pid %d.\n",
+                 args[0], pid_fork);
+
+          // FASE 4: Insertar tarea detenida en lista
+          block_SIGCHLD();
+          add_job(job_list, new_job(pid_fork, args[0], DETENIDO));
+          unblock_SIGCHLD();
+        }
+        else  // Finalizado o Reanudado (TODO: double check) (Que hacer con reanudado)
+        {
+          printf("Comando %s ejecutado en primer plano con pid %d. Estado %s. Info: %d.\n",
+                 args[0], pid_fork, status_strings[status_res], info);
+        }
       }
-      else
+      else                      // Segundo plano
       {
-        // Si es en segundo plano, no esperar
         printf("Comando %s ejecutado en segundo plano con pid %d.\n", args[0], pid_fork);
+
+        // FASE 4: insertar tarea BG en lista
+        block_SIGCHLD();
+        add_job(job_list, new_job(pid_fork, args[0], SEGUNDOPLANO));
+        unblock_SIGCHLD();
+
         continue;
       }
     }
