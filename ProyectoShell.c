@@ -57,6 +57,8 @@ int main(void)
   enum status status_res;     // Estado procesado por analyze_status()
   int info;		                // Informacion procesada por analyze_status()
 
+  ignore_terminal_signals();  // FASE 3
+
   while (1) // El programa termina cuando se pulsa Control+D dentro de get_command()
   {   		
     printf("COMANDO->");
@@ -68,9 +70,14 @@ int main(void)
     if (is_builtin(args))
       continue ;
 
-    int pid = fork();
-    if (pid == 0)      // hijo
+    pid_fork = fork();
+    if (pid_fork == 0)      // hijo
     {
+      new_process_group(getpid()); // FASE 3: el hijo crea su grupo
+      if (background == 0)
+        set_terminal(getpid());    // FASE 3: primer plano toma la terminal
+
+      restore_terminal_signals();  // FASE 3: reactiva señales
       if (execvp(args[0], args) == -1)
       {
         printf("Error. Comando %s no encontrado\n", args[0]);
@@ -78,19 +85,23 @@ int main(void)
       }
       exit(0);
     }
-    else if (pid > 0)  // Padre
+    else if (pid_fork > 0)  // Padre
     {
+      new_process_group(pid_fork);
       if (background == 0)
       {
-        // Si NO es en segundo plano, esperar al hijo
-        wait(NULL);
-        // Only print if execp successfull CHANGE
-        printf("Comando %s ejecutado en primer plano con pid %d.\n", args[0], pid);
+        set_terminal(pid_fork);                           // FASE 3: cede terminal al hijo
+        pid_wait = waitpid(pid_fork, &status, WUNTRACED); // FASE 3: wait con WUNTRACED
+        status_res = analyze_status(status, &info);       // FASE 3: analiza estado
+
+        set_terminal(getpid());   // FASE 3: recupera la terminal
+        printf("Comando %s ejecutado en primer plano con pid %d. Estado %s. Info: %d.\n",
+                args[0], pid_fork, status_strings[status_res], info);
       }
       else
       {
         // Si es en segundo plano, no esperar
-        printf("Comando %s ejecutado en segundo plano con pid %d.\n", args[0], pid);
+        printf("Comando %s ejecutado en segundo plano con pid %d.\n", args[0], pid_fork);
         continue;
       }
     }
