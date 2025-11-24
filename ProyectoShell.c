@@ -76,14 +76,15 @@ bool is_builtin(char **args)
   }
   else if (strcmp(args[0], "cd") == 0) // Doesn't handle failures, nor status msgs yet
   {
+    const char *path;
+
     if (!args[1])
-    {
-      const char *home = getenv("HOME");
-      if (home != NULL)
-        chdir(home);
-    }
+      path = getenv("HOME");
     else
-      chdir(args[1]);
+      path = args[1];
+
+    if (chdir(path) == -1)
+      printf("No se puede cambiar al directorio %s\n", path);
     return true;
   }
   // FASE 5: comando "jobs"
