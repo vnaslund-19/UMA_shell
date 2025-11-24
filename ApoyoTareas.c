@@ -195,8 +195,8 @@ void print_list(job *list, void (*print)(job *))
 }
 
 // -----------------------------------------------------------------------------
-// analyze_status() interpreta el estatus que devuelve wait para proporcionar la
-// causa de la finalización de un comando e info adicional asociada a dicho fin
+// analyze_status() interpreta el status que devuelve la llamada a waitpid()
+// para determinar el nuevo estado al que pasa el proceso asociado a un comando
 // -----------------------------------------------------------------------------
 enum status analyze_status(int status, int *info)
 {
@@ -205,19 +205,20 @@ enum status analyze_status(int status, int *info)
     *info = WSTOPSIG(status);
     return(SUSPENDIDO);
   }
-  else
+  else if (WIFCONTINUED (status))
   {
-    // el proceso termio
-    if (WIFSIGNALED(status))
-    { 
-      *info = WTERMSIG(status); 
-      return(REANUDADO);
-    }
-    else
-    { 
-      *info = WEXITSTATUS(status); 
-      return(FINALIZADO);
-    }
+    *info=0;
+    return(CONTINUADO); 
+  }
+  else if (WIFSIGNALED(status))
+  { 
+    *info = WTERMSIG(status); 
+    return(SEÑALADO);
+  }
+  else
+  { 
+    *info = WEXITSTATUS(status); 
+    return(FINALIZADO);
   }
 }
 

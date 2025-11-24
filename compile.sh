@@ -1,3 +1,3 @@
 #!/bin/bash
 
-gcc ProyectoShell.c ApoyoTareas.c -o MiShell
+gcc -Wall -Werror -Wextra ProyectoShell.c ApoyoTareas.c -o MiShell

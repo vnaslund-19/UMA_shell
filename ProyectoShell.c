@@ -51,11 +51,17 @@ void manejador(int sig)
               j->command, pid);
       j->ground = DETENIDO;     // FASE 4
     }
-    else if (st == REANUDADO)
+    else if (st == SEÑALADO)
     {
       printf("Comando %s ejecutado en segundo plano con PID %d ha reanudado su ejecución.\n",
               j->command, pid);
       j->ground = SEGUNDOPLANO; // FASE 4
+    }
+    else if (st == CONTINUADO)
+    {
+      printf("Comando %s ejecutado en segundo plano con PID %d ha reanudado su ejecución.\n",
+            j->command, pid);
+      j->ground = SEGUNDOPLANO; // vuelve a segundo plano
     }
   }
 }
@@ -77,6 +83,110 @@ bool is_builtin(char **args)
     }
     else
       chdir(args[1]);
+    return true;
+  }
+  // FASE 5: comando "jobs"
+  else if (strcmp(args[0], "jobs") == 0)
+  {
+    if (empty_list(job_list))
+      printf("No hay tareas en segundo plano ni suspendidas.\n");
+    else
+      print_job_list(job_list);
+    return true;
+  }
+  // FASE 5: comando "fg"
+  else if (strcmp(args[0], "fg") == 0)
+  {
+    if (empty_list(job_list))
+    {
+      printf("fg: no hay tareas en segundo plano ni suspendidas.\n");
+      return true;
+    }
+
+    int pos = 1; // por defecto, primera tarea (última que entró)
+    if (args[1])
+      pos = atoi(args[1]);
+
+    job *j = get_item_bypos(job_list, pos);
+    if (!j)
+    {
+      printf("fg: no existe la tarea %d\n", pos);
+      return true;
+    }
+
+    pid_t pgid = j->pgid;
+    enum ground prev_ground = j->ground;
+    char *command = strdup(j->command); // copia local del nombre del comando
+
+    int status, info;
+    enum status status_res;
+
+    // Pasar la tarea a primer plano: quitarla de la lista y gestionar en FG
+    block_SIGCHLD();                // FASE 5: proteger la lista
+    delete_job(job_list, j);        // ya no está en jobs (FG no se lista)
+    set_terminal(pgid);             // ceder terminal al comando
+
+    if (prev_ground == DETENIDO)    // si estaba detenido, reanudarlo
+      killpg(pgid, SIGCONT);
+
+    pid_t pid_wait = waitpid(pgid, &status, WUNTRACED);
+    status_res = analyze_status(status, &info);
+
+    set_terminal(getpid());         // recuperar el terminal
+    if (status_res == SUSPENDIDO)
+    {
+      printf("Comando %s suspendido en primer plano con pid %d.\n",
+             command, pgid);
+
+      // Si se suspende otra vez, vuelve a la lista como DETENIDO
+      add_job(job_list, new_job(pgid, command, DETENIDO));
+    }
+    else // aquí entran FINALIZADO, SEÑALADO y CONTINUADO
+    {
+      printf("Comando %s ejecutado en primer plano con pid %d. Estado %s. Info: %d.\n",
+             command, pgid, status_strings[status_res], info);
+    }
+
+    unblock_SIGCHLD();              // FASE 5: ya no tocamos la lista
+    free(command);                  // liberamos la copia local
+
+    return true;
+  }
+  // FASE 5: comando "bg"
+  else if (strcmp(args[0], "bg") == 0)
+  {
+    if (empty_list(job_list))
+    {
+      printf("bg: no hay tareas en segundo plano ni suspendidas.\n");
+      return true;
+    }
+
+    int pos = 1; // por defecto, primera tarea de la lista
+    if (args[1])
+      pos = atoi(args[1]);
+
+    job *j = get_item_bypos(job_list, pos);
+    if (!j)
+    {
+      printf("bg: no existe la tarea %d\n", pos);
+      return true;
+    }
+
+    block_SIGCHLD(); // FASE 5: proteger modificaciones de la lista
+
+    if (j->ground == DETENIDO)
+    {
+      killpg(j->pgid, SIGCONT);           // reanudar proceso detenido
+      j->ground = SEGUNDOPLANO;           // ahora está en segundo plano
+      printf("Comando %s reanudado en segundo plano con pid %d.\n",
+             j->command, j->pgid);
+    }
+    else
+    {
+      printf("bg: la tarea %d no está detenida.\n", pos);
+    }
+
+    unblock_SIGCHLD();
     return true;
   }
   else

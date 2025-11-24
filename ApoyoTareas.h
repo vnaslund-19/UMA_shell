@@ -23,9 +23,9 @@ Parte de este código ha sido adaptado del libro
 #include <sys/wait.h>
 
 // -----------------------   TIPOS DE DATOS ENUMERADOS   -----------------------
-enum status { SUSPENDIDO, REANUDADO, FINALIZADO };
+enum status { SUSPENDIDO, SEÑALADO, FINALIZADO, CONTINUADO };
 enum ground { PRIMERPLANO, SEGUNDOPLANO, DETENIDO };
-static char* status_strings[] = { "Suspendido", "Reanudado", "Finalizado" };
+static char* status_strings[] = { "Suspendido", "Reanudado", "Finalizado", "Continuado" };
 static char* ground_strings[] = { "Primer Plano", "Segundo Plano", "Detenido" };
 
 // -----------------   TIPO DE TAREAS PARA LA LISTA DE TAREAS   ----------------
