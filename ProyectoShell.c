@@ -27,6 +27,7 @@ void manejador(int sig)
 {
   int status, info;
   pid_t pid;
+  (void)sig; // Ya se sabe que es SIGCHLD
 
   // FASE 4: revisar procesos sin bloquear
   while ((pid = waitpid(-1, &status, WUNTRACED | WNOHANG | WCONTINUED)) > 0)
@@ -129,7 +130,7 @@ bool is_builtin(char **args)
     if (prev_ground == DETENIDO)    // si estaba detenido, reanudarlo
       killpg(pgid, SIGCONT);
 
-    pid_t pid_wait = waitpid(pgid, &status, WUNTRACED);
+    waitpid(pgid, &status, WUNTRACED);
     status_res = analyze_status(status, &info);
 
     set_terminal(getpid());         // recuperar el terminal
@@ -219,7 +220,7 @@ int main(void)
   char *args[MAX_LINE/2];     // La linea de comandos (de 256 cars.) tiene 128 argumentos como m�x
       
   // Variables de utilidad:
-  int pid_fork, pid_wait;     // pid para el proceso creado y esperado
+  int pid_fork;     // pid para el proceso creado y esperado
   int status;                 // Estado que devuelve la funcion wait
   enum status status_res;     // Estado procesado por analyze_status()
   int info;		                // Informacion procesada por analyze_status()
@@ -253,7 +254,7 @@ int main(void)
       if (background == 0)      // Primer plano
       {
         set_terminal(pid_fork);                           // FASE 3: cede terminal al hijo
-        pid_wait = waitpid(pid_fork, &status, WUNTRACED); // FASE 3: wait con WUNTRACED
+        waitpid(pid_fork, &status, WUNTRACED);            // FASE 3: wait con WUNTRACED
         status_res = analyze_status(status, &info);       // FASE 3: analiza estado
 
         set_terminal(getpid());   // FASE 3: recupera la terminal
